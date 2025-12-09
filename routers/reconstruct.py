@@ -11,15 +11,10 @@ import numpy as np
 from fastapi import APIRouter, HTTPException, Form
 from fastapi.responses import JSONResponse, FileResponse
 
+from models.sam3d_model import get_sam3d_model
 from routers.segment import session_data
 
 logger = logging.getLogger(__name__)
-
-
-def get_sam3d_model():
-    """Lazy import of SAM 3D Objects model"""
-    from models.sam3d_model import get_sam3d_model as _get_sam3d_model
-    return _get_sam3d_model()
 router = APIRouter(prefix="/api/reconstruct", tags=["reconstruction"])
 
 
@@ -92,7 +87,8 @@ async def generate_3d(
             "success": True,
             "session_id": session_id,
             "ply_path": output_path,
-            "download_url": f"/api/reconstruct/download/{session_id}"
+            "download_url": f"/api/reconstruct/download/{session_id}",
+            "mock": result.get("mock", False)
         })
         
     except HTTPException:
