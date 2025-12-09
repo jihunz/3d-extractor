@@ -77,14 +77,9 @@ class App {
             const response = await fetch('/api/info');
             const data = await response.json();
             
-            const sam3Status = data.models.sam3.available ? 'SAM3 Ready' : 'SAM3 (Mock)';
-            const sam3dStatus = data.models.sam3d.available ? 'SAM3D Ready' : 'SAM3D (Mock)';
+            const deviceType = data.device?.type?.toUpperCase() || 'Unknown';
+            this.statusText.textContent = `Ready (${deviceType})`;
             
-            this.statusText.textContent = `${sam3Status} | ${sam3dStatus}`;
-            
-            if (!data.models.sam3.available || !data.models.sam3d.available) {
-                this.showToast('Running in mock mode. Install SAM3 and SAM 3D Objects for full functionality.', 'warning');
-            }
         } catch (error) {
             this.statusText.textContent = 'Server Error';
             this.showToast('Failed to connect to server', 'error');
@@ -444,11 +439,10 @@ class App {
                 this.plyReady = true;
                 this.btnDownload.style.display = 'flex';
                 this.updateStep(3, 'completed');
+                this.showToast('3D Gaussian Splat generated successfully!', 'success');
                 
-                const msg = data.mock 
-                    ? '3D generated (mock mode). Install SAM 3D Objects for real results.'
-                    : '3D Gaussian Splat generated successfully!';
-                this.showToast(msg, 'success');
+                // Store download URL for viewer
+                this.downloadUrl = data.download_url;
             }
             
         } catch (error) {

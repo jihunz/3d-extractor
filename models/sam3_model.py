@@ -10,15 +10,19 @@ import logging
 
 logger = logging.getLogger(__name__)
 
-# Try to import SAM3, fall back to mock mode if not available
-try:
-    import torch
-    from sam3 import build_sam3_image_model
-    from sam3.model.sam3_image_processor import Sam3Processor
-    SAM3_AVAILABLE = True
-except ImportError:
-    SAM3_AVAILABLE = False
-    logger.warning("SAM3 not installed. Running in mock mode.")
+import torch
+from sam3 import build_sam3_image_model
+from sam3.model.sam3_image_processor import Sam3Processor
+
+
+def get_device() -> str:
+    """Get the best available device (CUDA > MPS > CPU)"""
+    if torch.cuda.is_available():
+        return "cuda"
+    elif torch.backends.mps.is_available():
+        return "mps"
+    else:
+        return "cpu"
 
 
 class SAM3Model:
@@ -27,17 +31,15 @@ class SAM3Model:
     Supports point and box prompts.
     """
     
-    def __init__(self, model_path: Optional[str] = None, device: str = "cuda"):
-        self.device = device
+    def __init__(self, model_path: Optional[str] = None, device: Optional[str] = None):
+        self.device = device or get_device()
         self.model = None
         self.processor = None
         self.current_image = None
         self.image_set = False
         
-        if SAM3_AVAILABLE:
-            self._load_model(model_path)
-        else:
-            logger.info("Running SAM3 in mock mode")
+        logger.info(f"Using device: {self.device}")
+        self._load_model(model_path)
     
     def _load_model(self, model_path: Optional[str] = None):
         """Load SAM3 model"""
@@ -46,13 +48,16 @@ class SAM3Model:
             
             # Build SAM3 model
             self.model = build_sam3_image_model()
-            self.processor = Sam3Processor(self.model)
             
             # Move to device
-            if torch.cuda.is_available() and self.device == "cuda":
+            if self.device == "cuda":
                 self.model = self.model.cuda()
+            elif self.device == "mps":
+                self.model = self.model.to("mps")
             
-            logger.info("SAM3 model loaded successfully")
+            self.processor = Sam3Processor(self.model)
+            
+            logger.info(f"SAM3 model loaded successfully on {self.device}")
         except Exception as e:
             logger.error(f"Failed to load SAM3 model: {e}")
             raise
@@ -65,15 +70,11 @@ class SAM3Model:
         try:
             self.current_image = image
             
-            if SAM3_AVAILABLE and self.processor:
-                # Convert PIL to numpy if needed
-                image_np = np.array(image)
-                self.processor.set_image(image_np)
-                self.image_set = True
-                logger.info(f"Image set: {image.size}")
-            else:
-                self.image_set = True
-                logger.info(f"Image set (mock mode): {image.size}")
+            # Convert PIL to numpy if needed
+            image_np = np.array(image)
+            self.processor.set_image(image_np)
+            self.image_set = True
+            logger.info(f"Image set: {image.size}")
             
             return True
         except Exception as e:
@@ -104,21 +105,6 @@ class SAM3Model:
         if not self.image_set:
             raise ValueError("Image not set. Call set_image() first.")
         
-        if SAM3_AVAILABLE and self.processor:
-            return self._predict_real(point_coords, point_labels, box, multimask_output)
-        else:
-            return self._predict_mock(point_coords, point_labels, box, multimask_output)
-    
-    def _predict_real(
-        self,
-        point_coords: Optional[List[Tuple[int, int]]],
-        point_labels: Optional[List[int]],
-        box: Optional[Tuple[int, int, int, int]],
-        multimask_output: bool
-    ) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
-        """Real SAM3 prediction"""
-        import torch
-        
         # Prepare inputs
         input_point = None
         input_label = None
@@ -141,42 +127,6 @@ class SAM3Model:
         
         return masks, scores, logits
     
-    def _predict_mock(
-        self,
-        point_coords: Optional[List[Tuple[int, int]]],
-        point_labels: Optional[List[int]],
-        box: Optional[Tuple[int, int, int, int]],
-        multimask_output: bool
-    ) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
-        """Mock prediction for testing without SAM3"""
-        if self.current_image is None:
-            raise ValueError("No image set")
-        
-        h, w = self.current_image.size[1], self.current_image.size[0]
-        
-        # Create a mock mask based on the prompt
-        mask = np.zeros((h, w), dtype=np.uint8)
-        
-        if point_coords:
-            # Create circular mask around the point
-            for x, y in point_coords:
-                radius = min(h, w) // 6
-                yy, xx = np.ogrid[:h, :w]
-                circle = (xx - x) ** 2 + (yy - y) ** 2 <= radius ** 2
-                mask[circle] = 1
-        
-        if box:
-            x1, y1, x2, y2 = box
-            mask[y1:y2, x1:x2] = 1
-        
-        # Return mock results
-        num_masks = 3 if multimask_output else 1
-        masks = np.stack([mask] * num_masks)
-        scores = np.array([0.95, 0.85, 0.75][:num_masks])
-        logits = masks.astype(np.float32) * 10  # Mock logits
-        
-        return masks, scores, logits
-    
     def reset(self):
         """Reset the model state"""
         self.current_image = None
@@ -193,4 +143,3 @@ def get_sam3_model() -> SAM3Model:
     if _sam3_model is None:
         _sam3_model = SAM3Model()
     return _sam3_model
-

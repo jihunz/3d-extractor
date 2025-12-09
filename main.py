@@ -9,6 +9,7 @@ import os
 import logging
 from contextlib import asynccontextmanager
 
+import torch
 from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
@@ -25,6 +26,28 @@ logger = logging.getLogger(__name__)
 from routers import segment, reconstruct
 
 
+def get_device_info() -> dict:
+    """Get device information"""
+    if torch.cuda.is_available():
+        return {
+            "type": "cuda",
+            "name": torch.cuda.get_device_name(0),
+            "memory": f"{torch.cuda.get_device_properties(0).total_memory / 1e9:.1f} GB"
+        }
+    elif torch.backends.mps.is_available():
+        return {
+            "type": "mps",
+            "name": "Apple Metal (MPS)",
+            "memory": "Shared"
+        }
+    else:
+        return {
+            "type": "cpu",
+            "name": "CPU",
+            "memory": "System RAM"
+        }
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Application lifespan handler"""
@@ -36,11 +59,21 @@ async def lifespan(app: FastAPI):
     os.makedirs("outputs/gaussians", exist_ok=True)
     os.makedirs("static", exist_ok=True)
     
-    # Pre-load models (optional, can be lazy loaded)
-    # from models.sam3_model import get_sam3_model
-    # from models.sam3d_model import get_sam3d_model
-    # get_sam3_model()
-    # get_sam3d_model()
+    # Log device info
+    device_info = get_device_info()
+    logger.info(f"Device: {device_info['type']} - {device_info['name']}")
+    
+    # Pre-load models
+    logger.info("Pre-loading models...")
+    try:
+        from models.sam3_model import get_sam3_model
+        from models.sam3d_model import get_sam3d_model
+        get_sam3_model()
+        get_sam3d_model()
+        logger.info("Models loaded successfully!")
+    except Exception as e:
+        logger.error(f"Failed to load models: {e}")
+        logger.warning("Server will start but model loading will be attempted on first request")
     
     logger.info("Server started successfully!")
     yield
@@ -78,6 +111,12 @@ async def root():
     return FileResponse("static/index.html")
 
 
+@app.get("/viewer")
+async def viewer():
+    """Serve the 3D viewer page"""
+    return FileResponse("static/viewer.html")
+
+
 @app.get("/health")
 async def health_check():
     """Health check endpoint"""
@@ -91,20 +130,18 @@ async def health_check():
 @app.get("/api/info")
 async def get_info():
     """Get server information and model status"""
-    from models.sam3_model import SAM3_AVAILABLE
-    from models.sam3d_model import SAM3D_AVAILABLE
+    device_info = get_device_info()
     
     return {
         "service": "3D Extractor",
         "version": "1.0.0",
+        "device": device_info,
         "models": {
             "sam3": {
-                "available": SAM3_AVAILABLE,
-                "status": "loaded" if SAM3_AVAILABLE else "mock_mode"
+                "status": "ready"
             },
             "sam3d": {
-                "available": SAM3D_AVAILABLE,
-                "status": "loaded" if SAM3D_AVAILABLE else "mock_mode"
+                "status": "ready"
             }
         }
     }

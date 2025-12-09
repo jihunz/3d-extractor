@@ -87,8 +87,7 @@ async def generate_3d(
             "success": True,
             "session_id": session_id,
             "ply_path": output_path,
-            "download_url": f"/api/reconstruct/download/{session_id}",
-            "mock": result.get("mock", False)
+            "download_url": f"/api/reconstruct/download/{session_id}"
         })
         
     except HTTPException:
