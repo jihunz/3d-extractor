@@ -10,17 +10,10 @@ import logging
 
 logger = logging.getLogger(__name__)
 
-import torch
-from sam3d_objects.inference import Inference
-from sam3d_objects.inference import (
-    ready_gaussian_for_video_rendering,
-    make_scene,
-    load_image
-)
-
 
 def get_device() -> str:
     """Get the best available device (CUDA > MPS > CPU)"""
+    import torch
     if torch.cuda.is_available():
         return "cuda"
     elif torch.backends.mps.is_available():
@@ -46,6 +39,9 @@ class SAM3DModel:
     def _load_model(self):
         """Load SAM 3D Objects model"""
         try:
+            import torch
+            from sam3d_objects.inference import Inference
+            
             logger.info("Loading SAM 3D Objects model...")
             
             # Default config path
@@ -55,6 +51,12 @@ class SAM3DModel:
             self.inference = Inference(self.config_path, compile=False, device=self.device)
             
             logger.info(f"SAM 3D Objects model loaded successfully on {self.device}")
+        except ImportError as e:
+            logger.error(f"SAM 3D Objects not installed. Install with: pip install git+https://github.com/facebookresearch/sam-3d-objects.git")
+            raise ImportError(
+                "SAM 3D Objects is not installed. Please install it with:\n"
+                "pip install git+https://github.com/facebookresearch/sam-3d-objects.git"
+            ) from e
         except Exception as e:
             logger.error(f"Failed to load SAM 3D Objects model: {e}")
             raise
@@ -82,6 +84,11 @@ class SAM3DModel:
                 - mesh_data: Additional mesh data if available
         """
         try:
+            from sam3d_objects.inference import (
+                ready_gaussian_for_video_rendering,
+                make_scene
+            )
+            
             # Convert PIL to numpy
             image_np = np.array(image)
             

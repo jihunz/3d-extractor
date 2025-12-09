@@ -63,17 +63,8 @@ async def lifespan(app: FastAPI):
     device_info = get_device_info()
     logger.info(f"Device: {device_info['type']} - {device_info['name']}")
     
-    # Pre-load models
-    logger.info("Pre-loading models...")
-    try:
-        from models.sam3_model import get_sam3_model
-        from models.sam3d_model import get_sam3d_model
-        get_sam3_model()
-        get_sam3d_model()
-        logger.info("Models loaded successfully!")
-    except Exception as e:
-        logger.error(f"Failed to load models: {e}")
-        logger.warning("Server will start but model loading will be attempted on first request")
+    # Models will be loaded lazily on first request
+    logger.info("Models will be loaded on first request")
     
     logger.info("Server started successfully!")
     yield

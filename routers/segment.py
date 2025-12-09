@@ -15,9 +15,13 @@ from fastapi import APIRouter, UploadFile, File, HTTPException, Form
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 
-from models.sam3_model import get_sam3_model
-
 logger = logging.getLogger(__name__)
+
+
+def get_sam3_model():
+    """Lazy import of SAM3 model"""
+    from models.sam3_model import get_sam3_model as _get_sam3_model
+    return _get_sam3_model()
 router = APIRouter(prefix="/api/segment", tags=["segmentation"])
 
 # Store for current session data

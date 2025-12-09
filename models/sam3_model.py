@@ -10,13 +10,10 @@ import logging
 
 logger = logging.getLogger(__name__)
 
-import torch
-from sam3 import build_sam3_image_model
-from sam3.model.sam3_image_processor import Sam3Processor
-
 
 def get_device() -> str:
     """Get the best available device (CUDA > MPS > CPU)"""
+    import torch
     if torch.cuda.is_available():
         return "cuda"
     elif torch.backends.mps.is_available():
@@ -44,6 +41,10 @@ class SAM3Model:
     def _load_model(self, model_path: Optional[str] = None):
         """Load SAM3 model"""
         try:
+            import torch
+            from sam3 import build_sam3_image_model
+            from sam3.model.sam3_image_processor import Sam3Processor
+            
             logger.info("Loading SAM3 model...")
             
             # Build SAM3 model
@@ -58,6 +59,12 @@ class SAM3Model:
             self.processor = Sam3Processor(self.model)
             
             logger.info(f"SAM3 model loaded successfully on {self.device}")
+        except ImportError as e:
+            logger.error(f"SAM3 not installed. Install with: pip install git+https://github.com/facebookresearch/sam3.git")
+            raise ImportError(
+                "SAM3 is not installed. Please install it with:\n"
+                "pip install git+https://github.com/facebookresearch/sam3.git"
+            ) from e
         except Exception as e:
             logger.error(f"Failed to load SAM3 model: {e}")
             raise
